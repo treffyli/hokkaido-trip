@@ -82,3 +82,4 @@ try{
  onSnapshot(expensesRef,snap=>{expenses=snap.docs.map(x=>({id:x.id,...x.data()}));draw();status('已連接 · 即時同步中')},error);
 }catch(e){status('連接失敗');error(e)}
 </script></body></html>
+<!-- redeploy -->
