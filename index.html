@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>去到北海道🇯🇵 玩乜L嘢好🏂</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#152c38;background:#f0f5f7}*{box-sizing:border-box}body{margin:0;padding:18px}main{max-width:780px;margin:auto}h1{font-size:clamp(23px,5vw,32px);margin:6px 0}h2{font-size:19px;margin:0 0 14px}.sub{color:#60717d;font-size:14px}.card{background:white;border:1px solid #dce7ed;border-radius:17px;padding:20px;margin:15px 0;box-shadow:0 3px 14px #1232 0}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1 1 135px}label{font-size:13px;font-weight:600;display:block;margin-bottom:5px}input,select,button{font:inherit;padding:11px;border-radius:9px;border:1px solid #bdcdd5;width:100%;background:white}button{background:#123e52;color:white;border:0;font-weight:600;cursor:pointer}button:disabled{opacity:.5}.smallbtn{width:auto;padding:9px 13px}.danger{background:#a33b41}.pill{display:inline-block;background:#e8f5f1;padding:7px 10px;border-radius:20px;margin:3px;font-size:14px}.line{padding:12px 0;border-bottom:1px solid #e5ecef}.line:last-child{border:0}.muted{color:#60717d;font-size:13px}.metric{font-size:19px;font-weight:700}.red{color:#b03a45}.green{color:#137a60}#status{font-size:13px;padding:8px 0;color:#456575}#error{color:#b03a45;white-space:pre-wrap}footer{font-size:12px;color:#667;margin:20px 0}.hidden{display:none} .balance{display:grid;grid-template-columns:1fr auto;gap:5px;align-items:center}.expense{display:flex;justify-content:space-between;gap:8px;align-items:center}.expense>div{min-width:0} .expense button{flex:0 0 auto}.hint{font-size:12px;color:#667} @media(max-width:460px){.card{padding:15px}.expense{align-items:flex-start;flex-wrap:wrap}}
+</style>
+</head>
+<body><main>
+<h1>去到北海道🇯🇵 玩乜L嘢好🏂</h1>
+<p class="sub">旅遊分帳｜JPY 1 = HKD 0.05｜多人即時同步</p>
+<div id="status">正在連接 Firebase…</div><div id="error" role="alert"></div>
+<section class="card"><h2>分享旅行</h2><p class="muted">將以下完整網址傳俾旅伴。任何持有連結的人均可查看及修改呢次旅行資料。</p><div class="row"><input id="share" readonly aria-label="分享網址"><button id="copy" class="smallbtn">複製邀請連結</button></div></section>
+<section class="card"><h2>旅伴</h2><form id="memberForm" class="row"><input id="memberName" placeholder="輸入旅伴名稱" maxlength="40" required><button class="smallbtn" type="submit">加入旅伴</button></form><div id="members" style="margin-top:10px"></div></section>
+<section class="card"><h2>新增支出</h2><form id="expenseForm">
+<div class="row"><div><label for="title">支出項目</label><input id="title" placeholder="例如：拉麵晚餐" maxlength="100" required></div><div><label for="date">日期</label><input id="date" type="date" required></div></div>
+<div class="row" style="margin-top:12px"><div><label for="amount">金額（日圓 ¥）</label><input id="amount" type="number" min="1" max="100000000" step="1" placeholder="9000" required></div><div><label for="payer">付款人</label><select id="payer" required><option value="">先加入旅伴</option></select></div></div>
+<button type="submit" id="addExpense" style="margin-top:14px">儲存支出</button></form></section>
+<section class="card"><h2>結算總覽</h2><div id="totals"></div><div id="balances"></div></section>
+<section class="card"><h2>誰要俾錢俾誰？</h2><div id="settlements" class="muted">加入旅伴同支出後顯示</div></section>
+<section class="card"><h2>支出明細</h2><div id="expenses" class="muted">暫時未有支出</div></section>
+<footer>這是簡易共用連結版本，資料儲存在你自己的 Firebase 專案。不要放入私隱資料或將連結公開發佈。</footer>
+</main>
+<script type="module">
+// 1. 將下面六項替換成 Firebase Console > Project settings > Your apps > Web app 的設定。
+const firebaseConfig = {
+ apiKey: "AIzaSyAVYl-zCp6AoO6AiCwEDzzyGFDT5XpTnmA",
+ authDomain: "hokkaido-trip-bfd21.firebaseapp.com",
+ projectId: "hokkaido-trip-bfd21",
+ storageBucket: "hokkaido-trip-bfd21.firebasestorage.app",
+ messagingSenderId: "375466868709",
+ appId: "1:375466868709:web:728bb10181c7723efcf90c"
+};
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
+import {getAuth,signInAnonymously} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
+import {getFirestore,collection,addDoc,deleteDoc,doc,onSnapshot,serverTimestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+const $=id=>document.getElementById(id);
+const status=message=>{$('status').textContent=message};
+const error=e=>{$('error').textContent=e?.message || String(e)};
+const hkd=cents=>'HK$'+(cents/100).toLocaleString('en-HK',{minimumFractionDigits:2,maximumFractionDigits:2});
+const jpy=yen=>'¥'+Number(yen).toLocaleString('ja-JP');
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let tripId=decodeURIComponent(location.hash.slice(1));
+if (!/^[a-f0-9]{32}$/.test(tripId)) {const bytes=crypto.getRandomValues(new Uint8Array(16));tripId=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');location.hash=tripId;}
+$('share').value=location.href;
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);$('copy').textContent='已複製';}catch{ $('share').select();status('請手動複製網址');}});
+$('date').value=new Date().toLocaleDateString('sv-SE');
+if(firebaseConfig.apiKey==='PASTE_API_KEY_HERE'){status('請先設定 Firebase');error('請開啟 index.html，填入 Firebase 網頁應用程式設定，再上傳 GitHub。');throw Error('Firebase config missing');}
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const membersRef=collection(db,'trips',tripId,'members'),expensesRef=collection(db,'trips',tripId,'expenses');
+let members=[],expenses=[];
+function draw(){
+ members.sort((a,b)=>a.id.localeCompare(b.id));
+ $('members').innerHTML=members.length?members.map(m=>`<span class="pill">${escapeHtml(m.name)}</span>`).join(''):'<p class="muted">尚未加入旅伴</p>';
+ const previous=$('payer').value;
+ $('payer').innerHTML='<option value="">請選擇</option>'+members.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+ if(members.some(m=>m.id===previous))$('payer').value=previous;
+ let paid=Object.fromEntries(members.map(m=>[m.id,0])),owed=Object.fromEntries(members.map(m=>[m.id,0]));
+ let totalCents=0;
+ for(const e of expenses){
+  const amountCents=Math.round(Number(e.amount)*5);totalCents+=amountCents;
+  if(paid[e.payer]!==undefined)paid[e.payer]+=amountCents;
+  if(members.length){const base=Math.floor(amountCents/members.length),rem=amountCents%members.length;members.forEach((m,i)=>owed[m.id]+=base+(i<rem?1:0));}
+ }
+ $('totals').innerHTML=`<p class="metric">總支出 ${hkd(totalCents)} <span class="muted">(${jpy(totalCents/5)})</span></p><p class="muted">${members.length} 位旅伴，平均分攤；港元按仙作結算</p>`;
+ $('balances').innerHTML=members.map(m=>{const net=paid[m.id]-owed[m.id];return `<div class="line balance"><div><strong>${escapeHtml(m.name)}</strong><div class="muted">已付 ${hkd(paid[m.id])} ｜ 應付 ${hkd(owed[m.id])}</div></div><strong class="${net>=0?'green':'red'}">${net>=0?'+':'−'}${hkd(Math.abs(net))}</strong></div>`}).join('');
+ const debtors=members.map(m=>({name:m.name,n:owed[m.id]-paid[m.id]})).filter(x=>x.n>0);
+ const creditors=members.map(m=>({name:m.name,n:paid[m.id]-owed[m.id]})).filter(x=>x.n>0);
+ const transfer=[];let i=0,j=0;
+ while(i<debtors.length && j<creditors.length){const d=debtors[i],c=creditors[j],n=Math.min(d.n,c.n);transfer.push(`<div class="line"><strong>${escapeHtml(d.name)}</strong> → <strong>${escapeHtml(c.name)}</strong>：<strong>${hkd(n)}</strong></div>`);d.n-=n;c.n-=n;if(!d.n)i++;if(!c.n)j++;}
+ $('settlements').innerHTML=transfer.join('')||(expenses.length?'已經結清，無需轉帳。':'加入支出後自動計算。');
+ const memberName=id=>members.find(m=>m.id===id)?.name||'已移除旅伴';
+ $('expenses').innerHTML=expenses.length?expenses.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`<div class="line expense"><div><strong>${escapeHtml(e.title)}</strong><div class="muted">${escapeHtml(e.date)} · ${escapeHtml(memberName(e.payer))} 付款</div></div><div style="text-align:right"><strong>${jpy(e.amount)}</strong><div class="muted">${hkd(Number(e.amount)*5)}</div></div><button class="smallbtn danger" data-delete="${e.id}" type="button">刪除</button></div>`).join(''):'暫時未有支出';
+}
+$('memberForm').addEventListener('submit',async ev=>{ev.preventDefault();const name=$('memberName').value.trim();if(!name||members.some(m=>m.name===name)){error('請輸入未使用嘅旅伴名稱');return;}try{await addDoc(membersRef,{name,createdAt:serverTimestamp()});$('memberName').value='';$('error').textContent='';}catch(e){error(e)}});
+$('expenseForm').addEventListener('submit',async ev=>{ev.preventDefault();const amount=Number($('amount').value),title=$('title').value.trim(),date=$('date').value,payer=$('payer').value;if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isSafeInteger(amount)||amount<=0||amount>100000000||!members.some(m=>m.id===payer)){error('請檢查項目、日期、整數日圓金額及付款人');return;}try{await addDoc(expensesRef,{title,date,amount,payer,createdAt:serverTimestamp()});$('title').value='';$('amount').value='';$('error').textContent='';}catch(e){error(e)}});
+$('expenses').addEventListener('click',async ev=>{const btn=ev.target.closest('button[data-delete]');if(!btn||!confirm('確定要刪除呢筆支出？'))return;try{await deleteDoc(doc(expensesRef,btn.dataset.delete))}catch(e){error(e)}});
+try{
+ await signInAnonymously(auth);
+ onSnapshot(membersRef,snap=>{members=snap.docs.map(x=>({id:x.id,...x.data()}));draw();status('已連接 · 即時同步中')},error);
+ onSnapshot(expensesRef,snap=>{expenses=snap.docs.map(x=>({id:x.id,...x.data()}));draw();status('已連接 · 即時同步中')},error);
+}catch(e){status('連接失敗');error(e)}
+</script></body></html>
